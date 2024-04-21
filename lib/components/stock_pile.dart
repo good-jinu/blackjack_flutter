@@ -4,7 +4,7 @@ import 'package:flame/components.dart';
 
 import '../blackjack_game.dart';
 import '../pile.dart';
-import 'card.dart';
+import 'card_component.dart';
 
 class StockPile extends PositionComponent
     with HasGameReference<BlackjackGame>
@@ -13,18 +13,18 @@ class StockPile extends PositionComponent
 
   /// Which cards are currently placed onto this pile. The first card in the
   /// list is at the bottom, the last card is on top.
-  final List<Card> _cards = [];
+  final List<CardComponent> _cards = [];
 
   //#region Pile API
 
   @override
-  bool canMoveCard(Card card, MoveMethod method) => method == MoveMethod.auto;
+  bool canMoveCard(CardComponent card, MoveMethod method) => method == MoveMethod.auto;
 
   @override
-  bool canAcceptCard(Card card) => false;
+  bool canAcceptCard(CardComponent card) => false;
 
   @override
-  void removeCard(Card card, MoveMethod method) {
+  void removeCard(CardComponent card, MoveMethod method) {
     assert(_cards.contains(card));
     final index = _cards.indexOf(card);
     _cards.removeRange(index, index + 1);
@@ -32,10 +32,10 @@ class StockPile extends PositionComponent
 
   @override
   // Card cannot be removed but could have been dragged out of place.
-  void returnCard(Card card) => card.priority = _cards.indexOf(card);
+  void returnCard(CardComponent card) => card.priority = _cards.indexOf(card);
 
   @override
-  void acquireCard(Card card) {
+  void acquireCard(CardComponent card) {
     assert(card.isFaceDown);
     card.pile = this;
     card.position = position;
@@ -45,7 +45,7 @@ class StockPile extends PositionComponent
 
   //#endregion
 
-  Card get topCard {
+  CardComponent get topCard {
     assert(_cards.isNotEmpty);
     return _cards.last;
   }

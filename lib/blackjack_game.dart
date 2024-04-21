@@ -6,7 +6,7 @@ import 'package:flame/game.dart';
 
 import 'blackjack_world.dart';
 
-enum Action { newDeal, sameDeal, changeDraw, haveFun, stay, hit }
+enum Action { newDeal, sameDeal, changeDraw, haveFun }
 
 class BlackjackGame extends FlameGame<BlackjackWorld> {
   static const double cardGap = 175.0;

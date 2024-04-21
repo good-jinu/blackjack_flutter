@@ -2,7 +2,7 @@ import 'package:flame/components.dart';
 
 import '../blackjack_game.dart';
 import '../pile.dart';
-import 'card.dart';
+import 'card_component.dart';
 
 class PlayerPile extends PositionComponent
     with HasGameReference<BlackjackGame>
@@ -11,27 +11,27 @@ class PlayerPile extends PositionComponent
 
   /// Which cards are currently placed onto this pile. The first card in the
   /// list is at the bottom, the last card is on top.
-  final List<Card> _cards = [];
+  final List<CardComponent> _cards = [];
   final Vector2 _fanOffset = Vector2(BlackjackGame.cardWidth * 0.2, 0);
 
   //#region Pile API
 
   @override
-  bool canMoveCard(Card card, MoveMethod method) => false;
+  bool canMoveCard(CardComponent card, MoveMethod method) => false;
 
   @override
-  bool canAcceptCard(Card card) => false;
+  bool canAcceptCard(CardComponent card) => false;
 
   @override
-  void removeCard(Card card, MoveMethod method) =>
+  void removeCard(CardComponent card, MoveMethod method) =>
       throw StateError('cannot remove cards');
 
   @override
   // Card cannot be removed but could have been dragged out of place.
-  void returnCard(Card card) => card.priority = _cards.indexOf(card);
+  void returnCard(CardComponent card) => card.priority = _cards.indexOf(card);
 
   @override
-  void acquireCard(Card card) {
+  void acquireCard(CardComponent card) {
     assert(card.isFaceUp);
     card.pile = this;
     card.position = position + _fanOffset * _cards.length.toDouble();
@@ -64,4 +64,7 @@ class PlayerPile extends PositionComponent
 
     return sum;
   }
+
+  /// returns list of cards
+  List<CardComponent> get cardList => _cards;
 }

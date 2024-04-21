@@ -1,17 +1,22 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:blackjack/components/player_pile.dart';
+import 'package:blackjack/components/rank_sprite.dart';
+import 'package:blackjack/entities/card/card.dart';
+import 'package:blackjack/entities/card/rank.dart';
+import 'package:blackjack/entities/card/suit.dart';
+import 'package:blackjack/entities/player/blackjack_player.dart';
+import 'package:blackjack/entities/player/computer_player.dart';
+import 'package:blackjack/entities/player/human_player.dart';
 import 'package:blackjack/pile.dart';
 import 'package:flame/components.dart';
 import 'package:flame/flame.dart';
 
 import 'blackjack_game.dart';
-import 'components/card.dart';
+import 'components/card_component.dart';
 import 'components/flat_button.dart';
-import 'components/foundation_pile.dart';
 import 'components/stock_pile.dart';
-import 'components/tableau_pile.dart';
-import 'components/waste_pile.dart';
 
 class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
   final cardGap = BlackjackGame.cardGap;
@@ -22,65 +27,41 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
   final blackjackValue = BlackjackGame.blackjackValue;
 
   final stock = StockPile(position: Vector2(0.0, 0.0));
-  final waste = WastePile(position: Vector2(0.0, 0.0));
-  final oponent = PlayerPile(position: Vector2(0.0, 0.0));
-  final hero = PlayerPile(position: Vector2(0.0, 0.0));
-  final List<FoundationPile> foundations = [];
-  final List<TableauPile> tableauPiles = [];
-  final List<Card> cards = [];
+  final villianPile = PlayerPile(position: Vector2(0.0, 0.0));
+  final heroPile = PlayerPile(position: Vector2(0.0, 0.0));
+  final List<CardComponent> cards = [];
   late Vector2 playAreaSize;
+  late ComputerPlayer villian;
+  late HumanPlayer hero;
 
   @override
   Future<void> onLoad() async {
     await Flame.images.load('blackjack-sprites.png');
 
     stock.position = Vector2(cardGap, topGap);
-    waste.position = Vector2(cardSpaceWidth + cardGap, topGap);
-    oponent.position =
+    villianPile.position =
         Vector2(cardSpaceWidth * 3 + cardGap, cardSpaceHeight + topGap);
-    hero.position =
+    heroPile.position =
         Vector2(cardSpaceWidth * 3 + cardGap, 4 * cardSpaceHeight + topGap);
 
-    for (var i = 0; i < 4; i++) {
-      foundations.add(
-        FoundationPile(
-          i,
-          checkWin,
-          position: Vector2((i + 3) * cardSpaceWidth + cardGap, topGap),
-        ),
-      );
-    }
-    for (var i = 0; i < 7; i++) {
-      tableauPiles.add(
-        TableauPile(
-          position: Vector2(
-            i * cardSpaceWidth + cardGap,
-            cardSpaceHeight + topGap,
-          ),
-        ),
-      );
-    }
-
     // Add a Base Card to the Stock Pile, above the pile and below other cards.
-    final baseCard = Card(1, 0, isBaseCard: true);
+    final baseCard = CardComponent(Rank.ace, Suit.club, isBaseCard: true);
     baseCard.position = stock.position;
     baseCard.priority = -1;
     baseCard.pile = stock;
     stock.priority = -2;
 
-    for (var rank = 1; rank <= 13; rank++) {
-      for (var suit = 0; suit < 4; suit++) {
-        final card = Card(rank, suit);
+    for (final rank in Rank.values) {
+      for (final suit in Suit.values) {
+        final card = CardComponent(rank, suit);
         card.position = stock.position;
         cards.add(card);
       }
     }
 
     add(stock);
-    add(oponent);
-    add(hero);
-    addAll(foundations);
-    addAll(tableauPiles);
+    add(villianPile);
+    add(heroPile);
     addAll(cards);
     add(baseCard);
 
@@ -89,13 +70,26 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
     final gameMidX = playAreaSize.x / 2;
     final gameMidY = playAreaSize.y / 2;
 
-    addButton('Stay', Vector2(gameMidX - cardGap * 2, cardHeight),
-        Vector2(cardGap, playAreaSize.y - cardSpaceHeight), Action.stay);
-    addButton(
-        'Hit',
-        Vector2(gameMidX - cardGap * 2, cardHeight),
-        Vector2(gameMidX + cardGap, playAreaSize.y - cardSpaceHeight),
-        Action.hit);
+    final heroValueBox =
+        TextComponent(position: heroPile.position + Vector2(cardSpaceWidth, 0));
+    final villianValueBox = TextComponent(
+        position: villianPile.position + Vector2(cardSpaceWidth, 0));
+
+    final stayButton = FlatButton('Stay',
+        size: Vector2(gameMidX - cardGap * 2, cardHeight),
+        position: Vector2(cardGap, playAreaSize.y - cardSpaceHeight),
+        anchor: Anchor.topLeft);
+    final hitButton = FlatButton('Hit',
+        size: Vector2(gameMidX - cardGap * 2, cardHeight),
+        position: Vector2(gameMidX + cardGap, playAreaSize.y - cardSpaceHeight),
+        anchor: Anchor.topLeft);
+
+    add(stayButton);
+    add(hitButton);
+
+    hero = HumanPlayer(heroPile, heroValueBox, stayButton, hitButton);
+
+    villian = ComputerPlayer(villianPile, villianValueBox, hero);
 
     final camera = game.camera;
     camera.viewfinder.visibleGameSize = playAreaSize;
@@ -105,51 +99,7 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
     deal();
   }
 
-  void addButton(String label, Vector2 size, Vector2 position, Action action) {
-    final button =
-        FlatButton(label, size: size, position: position, onReleased: () {
-      switch (action) {
-        case Action.stay:
-          while (oponent.sumOfValue < blackjackValue &&
-              oponent.sumOfValue < hero.sumOfValue) {
-            final cardForOponent = stock.topCard;
-            stock.removeCard(cardForOponent, MoveMethod.auto);
-            cardForOponent.flip();
-            cardForOponent.doMove(oponent.position,
-                speed: 15,
-                start: 0,
-                onComplete: () => oponent.acquireCard(cardForOponent));
-          }
-          checkWin();
-          break;
-        case Action.hit:
-          final card = stock.topCard;
-          stock.removeCard(card, MoveMethod.auto);
-          card.flip();
-          card.doMove(hero.position,
-              speed: 15, start: 0, onComplete: () => hero.acquireCard(card));
-          if (oponent.sumOfValue < blackjackValue &&
-              oponent.sumOfValue < hero.sumOfValue) {
-            final cardForOponent = stock.topCard;
-            cardForOponent.flip();
-            cardForOponent.doMove(oponent.position,
-                speed: 15,
-                start: 0,
-                onComplete: () => oponent.acquireCard(cardForOponent));
-          }
-
-          if (oponent.sumOfValue > blackjackValue) {
-            checkWin();
-          }
-          break;
-        default:
-          break;
-      }
-    }, anchor: Anchor.topLeft);
-    add(button);
-  }
-
-  void deal() {
+  deal() {
     assert(cards.length == 52, 'There are ${cards.length} cards: should be 52');
 
     if (game.action != Action.sameDeal) {
@@ -172,15 +122,19 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
     var cardToDeal = cards.length - 1;
     var nMovingCards = 0;
     for (var i = 0; i < 2; i++) {
-      final destination = i == 0 ? oponent : hero;
+      final destination = i == 0 ? villianPile : heroPile;
       for (var j = 0; j < 2; j++) {
         final card = cards[cardToDeal--];
         card.flip();
         card.doMove(destination.position,
             speed: 15.0,
             start: nMovingCards * 0.15,
-            startPriority: 100 + nMovingCards, onComplete: () {
+            startPriority: 100 + nMovingCards, onComplete: () async {
           destination.acquireCard(card);
+          nMovingCards--;
+          if (nMovingCards == 0) {
+            print(await villian.decidePlayerAction());
+          }
         });
         nMovingCards++;
       }
@@ -192,12 +146,12 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
   }
 
   void checkWin() {
-    if ((hero.sumOfValue > oponent.sumOfValue &&
-            hero.sumOfValue <= blackjackValue) ||
-        oponent.sumOfValue > blackjackValue) {
+    if ((heroPile.sumOfValue > villianPile.sumOfValue &&
+            heroPile.sumOfValue <= blackjackValue) ||
+        villianPile.sumOfValue > blackjackValue) {
       print('hero won');
     } else {
-      print('oponent won');
+      print('villian won');
     }
   }
 
