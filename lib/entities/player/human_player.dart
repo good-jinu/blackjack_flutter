@@ -22,8 +22,16 @@ class HumanPlayer implements BlackjackPlayer {
   Future<PlayerAction> decidePlayerAction() {
     final completer = Completer<PlayerAction>();
 
-    _stayButton.onReleased = () => completer.complete(PlayerAction.stay);
-    _hitButton.onReleased = () => completer.complete(PlayerAction.hit);
+    _stayButton.onReleased = () {
+      _stayButton.onReleased = () {};
+      _hitButton.onReleased = () {};
+      completer.complete(PlayerAction.stay);
+    };
+    _hitButton.onReleased = () {
+      _stayButton.onReleased = () {};
+      _hitButton.onReleased = () {};
+      completer.complete(PlayerAction.hit);
+    };
 
     return completer.future;
   }

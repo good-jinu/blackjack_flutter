@@ -6,7 +6,6 @@ import 'package:blackjack/components/player_pile.dart';
 import 'package:blackjack/entities/card/card.dart';
 import 'package:blackjack/entities/player/blackjack_player.dart';
 import 'package:flame/components.dart';
-import 'package:flame/input.dart';
 
 class ComputerPlayer implements BlackjackPlayer {
   ComputerPlayer(this._pile, this._valueBox, this._oponent);
@@ -22,7 +21,10 @@ class ComputerPlayer implements BlackjackPlayer {
   Future<PlayerAction> decidePlayerAction() {
     final completer = Completer<PlayerAction>();
 
-    if (cardTotalValue > BlackjackGame.blackjackValue - 5) {
+    if ((cardTotalValue > BlackjackGame.blackjackValue - 5 &&
+            cardTotalValue >= _oponent.cardTotalValue) ||
+        _oponent.cardTotalValue > BlackjackGame.blackjackValue ||
+        (_oponent.isStayed && cardTotalValue >= _oponent.cardTotalValue)) {
       completer.complete(PlayerAction.stay);
     } else {
       completer.complete(PlayerAction.hit);

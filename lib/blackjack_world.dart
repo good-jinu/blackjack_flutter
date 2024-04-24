@@ -2,16 +2,15 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:blackjack/components/player_pile.dart';
-import 'package:blackjack/components/rank_sprite.dart';
-import 'package:blackjack/entities/card/card.dart';
 import 'package:blackjack/entities/card/rank.dart';
 import 'package:blackjack/entities/card/suit.dart';
 import 'package:blackjack/entities/player/blackjack_player.dart';
 import 'package:blackjack/entities/player/computer_player.dart';
 import 'package:blackjack/entities/player/human_player.dart';
-import 'package:blackjack/pile.dart';
 import 'package:flame/components.dart';
 import 'package:flame/flame.dart';
+import 'package:flame/palette.dart';
+import 'package:flutter/painting.dart';
 
 import 'blackjack_game.dart';
 import 'components/card_component.dart';
@@ -29,6 +28,16 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
   final stock = StockPile(position: Vector2(0.0, 0.0));
   final villianPile = PlayerPile(position: Vector2(0.0, 0.0));
   final heroPile = PlayerPile(position: Vector2(0.0, 0.0));
+  final statusBoard = TextComponent(
+    position: Vector2(0, 0),
+    textRenderer: TextPaint(
+      style: TextStyle(
+        fontSize: 300.0,
+        color: BasicPalette.white.color,
+      ),
+    ),
+    anchor: Anchor.center,
+  );
   final List<CardComponent> cards = [];
   late Vector2 playAreaSize;
   late ComputerPlayer villian;
@@ -65,27 +74,66 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
     addAll(cards);
     add(baseCard);
 
-    playAreaSize =
-        Vector2(7 * cardSpaceWidth + cardGap, 6 * cardSpaceHeight + topGap);
+    playAreaSize = Vector2(
+      7 * cardSpaceWidth + cardGap,
+      6 * cardSpaceHeight + topGap,
+    );
     final gameMidX = playAreaSize.x / 2;
     final gameMidY = playAreaSize.y / 2;
 
-    final heroValueBox =
-        TextComponent(position: heroPile.position + Vector2(cardSpaceWidth, 0));
-    final villianValueBox = TextComponent(
-        position: villianPile.position + Vector2(cardSpaceWidth, 0));
+    statusBoard.position = Vector2(gameMidX, gameMidY);
 
-    final stayButton = FlatButton('Stay',
-        size: Vector2(gameMidX - cardGap * 2, cardHeight),
-        position: Vector2(cardGap, playAreaSize.y - cardSpaceHeight),
-        anchor: Anchor.topLeft);
-    final hitButton = FlatButton('Hit',
-        size: Vector2(gameMidX - cardGap * 2, cardHeight),
-        position: Vector2(gameMidX + cardGap, playAreaSize.y - cardSpaceHeight),
-        anchor: Anchor.topLeft);
+    add(statusBoard);
+
+    final heroValueBox = TextComponent(
+      textRenderer: TextPaint(
+        style: TextStyle(
+          fontSize: 300.0,
+          color: BasicPalette.white.color,
+        ),
+      ),
+      position: heroPile.position + Vector2(cardSpaceWidth * 2, 0),
+    );
+    final villianValueBox = TextComponent(
+      textRenderer: TextPaint(
+        style: TextStyle(
+          fontSize: 300.0,
+          color: BasicPalette.white.color,
+        ),
+      ),
+      position: villianPile.position + Vector2(cardSpaceWidth * 2, 0),
+    );
+    add(heroValueBox);
+    add(villianValueBox);
+
+    final stayButton = FlatButton(
+      'Stay',
+      size: Vector2(gameMidX - cardGap * 2, cardHeight * 0.75),
+      position: Vector2(cardGap, playAreaSize.y - cardSpaceHeight),
+      anchor: Anchor.topLeft,
+    );
+    final hitButton = FlatButton(
+      'Hit',
+      size: Vector2(gameMidX - cardGap * 2, cardHeight * 0.75),
+      position: Vector2(gameMidX + cardGap, playAreaSize.y - cardSpaceHeight),
+      anchor: Anchor.topLeft,
+    );
 
     add(stayButton);
     add(hitButton);
+
+    final replayButton = FlatButton(
+      'new Deal',
+      size: Vector2(cardSpaceWidth * 1.5, topGap),
+      position: Vector2(playAreaSize.x - cardGap, topGap),
+      onReleased: () {
+        game.action = Action.newDeal;
+        game.world = BlackjackWorld();
+      },
+      anchor: Anchor.topRight,
+    );
+
+    add(replayButton);
 
     hero = HumanPlayer(heroPile, heroValueBox, stayButton, hitButton);
 
@@ -123,17 +171,18 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
     var nMovingCards = 0;
     for (var i = 0; i < 2; i++) {
       final destination = i == 0 ? villianPile : heroPile;
+      final destinationPlayer = i == 0 ? villian : hero;
       for (var j = 0; j < 2; j++) {
         final card = cards[cardToDeal--];
         card.flip();
         card.doMove(destination.position,
             speed: 15.0,
             start: nMovingCards * 0.15,
-            startPriority: 100 + nMovingCards, onComplete: () async {
-          destination.acquireCard(card);
+            startPriority: 100 + nMovingCards, onComplete: () {
+          destinationPlayer.acquireCard(card);
           nMovingCards--;
           if (nMovingCards == 0) {
-            print(await villian.decidePlayerAction());
+            startTurn();
           }
         });
         nMovingCards++;
@@ -146,12 +195,88 @@ class BlackjackWorld extends World with HasGameReference<BlackjackGame> {
   }
 
   void checkWin() {
-    if ((heroPile.sumOfValue > villianPile.sumOfValue &&
-            heroPile.sumOfValue <= blackjackValue) ||
-        villianPile.sumOfValue > blackjackValue) {
-      print('hero won');
+    if ((heroPile.sumOfValue > villianPile.sumOfValue ||
+            villianPile.sumOfValue > blackjackValue) &&
+        heroPile.sumOfValue <= blackjackValue) {
+      statusBoard.text = 'you won';
+    } else if (hero.cardTotalValue == villian.cardTotalValue) {
+      statusBoard.text = 'draw';
     } else {
-      print('villian won');
+      statusBoard.text = 'you lose';
+    }
+  }
+
+  bool isHeroTurn = false;
+
+  void startTurn() async {
+    if ((hero.isStayed || hero.cardTotalValue > blackjackValue) &&
+        (villian.isStayed || villian.cardTotalValue > blackjackValue)) {
+      checkWin();
+      return;
+    }
+
+    if (isHeroTurn) {
+      isHeroTurn = false;
+
+      if (hero.isStayed ||
+          (villian.isStayed && hero.cardTotalValue > villian.cardTotalValue)) {
+        hero.isStayed = true;
+        startTurn();
+        return;
+      }
+
+      final action = await hero.decidePlayerAction();
+
+      switch (action) {
+        case PlayerAction.stay:
+          statusBoard.text = 'hero stayed';
+          hero.isStayed = true;
+          startTurn();
+          break;
+        case PlayerAction.hit:
+          statusBoard.text = 'hero hit';
+          final card = stock.topCard;
+          card.flip();
+          card.doMove(heroPile.position, onComplete: () {
+            hero.acquireCard(card);
+            if (hero.cardTotalValue >= blackjackValue) {
+              hero.isStayed = true;
+            }
+            startTurn();
+          });
+          break;
+      }
+    } else {
+      isHeroTurn = true;
+
+      if (villian.isStayed ||
+          (villian.isStayed && hero.cardTotalValue < villian.cardTotalValue)) {
+        villian.isStayed = true;
+        startTurn();
+        return;
+      }
+
+      final action = await villian.decidePlayerAction();
+
+      switch (action) {
+        case PlayerAction.stay:
+          statusBoard.text = 'villian stayed';
+          villian.isStayed = true;
+          startTurn();
+          break;
+        case PlayerAction.hit:
+          statusBoard.text = 'villian hit';
+          final card = stock.topCard;
+          card.flip();
+          card.doMove(villianPile.position, onComplete: () {
+            villian.acquireCard(card);
+            if (villian.cardTotalValue >= blackjackValue) {
+              villian.isStayed = true;
+            }
+            startTurn();
+          });
+          break;
+      }
     }
   }
 

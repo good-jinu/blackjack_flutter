@@ -1,5 +1,3 @@
-import 'package:blackjack/components/card_component.dart';
-import 'package:blackjack/components/player_pile.dart';
 import 'package:blackjack/entities/card/card.dart';
 
 enum PlayerAction { stay, hit }
